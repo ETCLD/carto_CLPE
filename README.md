@@ -1,6 +1,6 @@
 # Carte des Comités Locaux pour l'Emploi — France
 
-Carte interactive des 362 Comités Locaux pour l'Emploi (CLPE), regroupements de communes sur le territoire français.
+Carte interactive des 362 Comités Locaux pour l'Emploi (CLPE) et des 85 Territoires Zéro Chomeur de Longue Durée (TZCLD), regroupements de communes sur le territoire français.
 
 ## 🚀 Hébergement sur GitHub Pages
 
@@ -46,6 +46,7 @@ La carte sera disponible à l'adresse :
 ## 🗺️ Fonctionnalités
 
 - **362 CLPE** colorés en 6 tonalités de bleu avec algorithme de coloriage de graphe (aucun voisin de même couleur)
+- **85 CLE TZCLD** Avec choix de l'affichage ou non
 - **Survol** → infobulle avec le nom du comité
 - **Clic** sur un CLPE → zoom automatique
 - **3 listes déroulantes** : Région / Département / CLPE → zoom sur le territoire sélectionné
