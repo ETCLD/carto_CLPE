@@ -113,6 +113,7 @@ select:focus { border-color:#4a9fd4; box-shadow:0 0 0 2px rgba(74,159,212,.2); }
 .leg-item { display:flex; align-items:center; gap:8px; margin-bottom:5px; color:#7090a8; }
 .leg-swatch { width:24px; height:10px; border-radius:3px; flex-shrink:0; }
 .leg-line { width:24px; flex-shrink:0; }
+.layer-date { font-size:0.55rem; color:#4a7a9a; font-style:italic; margin-left:4px; font-weight:normal; letter-spacing:0; }
 .clpe-label { font-size:.54rem; color:#90d0f8; font-weight:700; text-shadow:0 0 4px #000,0 0 9px #000,0 0 14px #000; white-space:nowrap; pointer-events:none; line-height:1.2; text-align:center; }
 </style>
 </head>
@@ -215,12 +216,12 @@ select:focus { border-color:#4a9fd4; box-shadow:0 0 0 2px rgba(74,159,212,.2); }
   </div>
   <div id="legend">
     <h3>Légende</h3>
-    <div class="leg-item"><div class="leg-swatch" style="background:linear-gradient(90deg,#1a5276,#2980b9,#1abc9c);opacity:.8;border:1px solid rgba(30,100,160,.4);"></div>Comité Local Pour l'Emploi</div>
-    <div class="leg-item"><div class="leg-line"><svg width="24" height="4"><line x1="0" y1="2" x2="24" y2="2" stroke="#f39c12" stroke-width="2.5"/></svg></div>Délimitations TZCLD</div>
-    <div class="leg-item"><div class="leg-line"><svg width="24" height="4"><line x1="0" y1="2" x2="24" y2="2" stroke="#e879b0" stroke-width="2.5"/></svg></div>Région</div>
-    <div class="leg-item"><div class="leg-line"><svg width="24" height="4"><line x1="0" y1="2" x2="24" y2="2" stroke="#e8a030" stroke-width="1.8"/></svg></div>Département</div>
-    <div class="leg-item"><div class="leg-line"><svg width="24" height="4"><line x1="0" y1="2" x2="24" y2="2" stroke="#80d8b8" stroke-width="1.5"/></svg></div>EPCI</div>
-    <div class="leg-item"><div class="leg-line"><svg width="24" height="4"><line x1="0" y1="2" x2="24" y2="2" stroke="rgba(100,180,240,0.9)" stroke-width="1.3"/></svg></div>Commune</div>
+    <div class="leg-item"><div class="leg-swatch" style="background:linear-gradient(90deg,#1a5276,#2980b9,#1abc9c);opacity:.8;border:1px solid rgba(30,100,160,.4);"></div>Comité Local Pour l'Emploi <span id="date-clpe" class="layer-date"></span></div>
+    <div class="leg-item"><div class="leg-line"><svg width="24" height="4"><line x1="0" y1="2" x2="24" y2="2" stroke="#f39c12" stroke-width="2.5"/></svg></div>Délimitations TZCLD <span id="date-tzcld" class="layer-date"></span></div>
+    <div class="leg-item"><div class="leg-line"><svg width="24" height="4"><line x1="0" y1="2" x2="24" y2="2" stroke="#e879b0" stroke-width="2.5"/></svg></div>Région <span id="date-reg" class="layer-date"></span></div>
+    <div class="leg-item"><div class="leg-line"><svg width="24" height="4"><line x1="0" y1="2" x2="24" y2="2" stroke="#e8a030" stroke-width="1.8"/></svg></div>Département <span id="date-dep" class="layer-date"></span></div>
+    <div class="leg-item"><div class="leg-line"><svg width="24" height="4"><line x1="0" y1="2" x2="24" y2="2" stroke="#80d8b8" stroke-width="1.5"/></svg></div>EPCI <span id="date-epci" class="layer-date"></span></div>
+    <div class="leg-item"><div class="leg-line"><svg width="24" height="4"><line x1="0" y1="2" x2="24" y2="2" stroke="rgba(100,180,240,0.9)" stroke-width="1.3"/></svg></div>Commune <span id="date-com" class="layer-date"></span></div>
   </div>
 </div>
 
@@ -264,7 +265,7 @@ let navLevel='national';
 let nav={region:null,department:null,clpe:null};
 
 function updateNavBar(){
-  document.getElementById('nav-national').classList.toggle('active',navLevel==='national');
+  document.getElementById('nav-national').classList.toggle('active',navLevel==national');
   const show=id=>document.getElementById(id).classList.remove('hidden');
   const hide=id=>document.getElementById(id).classList.add('hidden');
   if(nav.region){
@@ -478,19 +479,36 @@ function addBbox(geojson){
   return geojson;
 }
 
+// Fonction pour récupérer le geojson et extraire sa date de dernière modification
+async function fetchWithDate(url, dateId) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status} sur ${url}`);
+  const lastMod = res.headers.get('Last-Modified');
+  if (lastMod) {
+    const d = new Date(lastMod);
+    if (!isNaN(d)) {
+      const el = document.getElementById(dateId);
+      if (el) el.textContent = `(màj ${d.toLocaleDateString('fr-FR')})`;
+    }
+  }
+  return res.json();
+}
+
 async function loadAll(){
   setProgress(5,'Chargement des régions…');
-  const regRaw=await fetch('data/region.geojson').then(r=>r.json());
+  const regRaw=await fetchWithDate('data/region.geojson', 'date-reg');
   addBbox(regRaw);
   REG_FULL=regRaw;
   REG_DATA={...regRaw,features:regRaw.features.filter(f=>!REGS_NO_CLPE.has(f.properties.nom_officiel))};
+  
   setProgress(14,'Chargement des départements…');
-  const depRaw=await fetch('data/departement.geojson').then(r=>r.json());
+  const depRaw=await fetchWithDate('data/departement.geojson', 'date-dep');
   addBbox(depRaw);
   DEP_FULL=depRaw;
   DEP_DATA={...depRaw,features:depRaw.features.filter(f=>!DEPS_NO_CLPE.has(f.properties.nom_officiel))};
+  
   setProgress(25,'Chargement des comités locaux…');
-  CLPE_DATA=await fetch('data/CLPE.geojson').then(r=>r.json()).then(geojson=>{
+  CLPE_DATA=await fetchWithDate('data/CLPE.geojson', 'date-clpe').then(geojson=>{
     geojson.features=geojson.features.map((f,i)=>{
       const props=f.properties||{};
       const clpeName=props['Libellé Comité Local Pour l-Emploi']||props['CLPE']||props['nom']||'';
@@ -502,6 +520,7 @@ async function loadAll(){
     });
     return geojson;
   });
+  
   const _existingClpe=new Set(CLPE_DATA.features.map(f=>f.properties.CLPE));
   ISLANDS_SPECIAL.forEach(name=>{
     if(!_existingClpe.has(name)){
@@ -513,14 +532,16 @@ async function loadAll(){
       }
     }
   });
+  
   setProgress(36,'Chargement des communes (incluant DOM)…');
-  COM_DATA=await fetch('data/commune.geojson').then(r=>r.json());
+  COM_DATA=await fetchWithDate('data/commune.geojson', 'date-com');
+  
   setProgress(55,'Chargement des EPCI…');
-  EPCI_DATA=await fetch('data/epci.geojson').then(r=>r.json()).catch(()=>{console.warn('epci.geojson non disponible');return null;});
+  EPCI_DATA=await fetchWithDate('data/epci.geojson', 'date-epci').catch(()=>{console.warn('epci.geojson non disponible');return null;});
   
   setProgress(65,'Chargement des délimitations TZCLD…');
   try {
-    TZCLD_DATA = await fetch('data/cle-delimitations.geojson').then(r=>r.json());
+    TZCLD_DATA = await fetchWithDate('data/cle-delimitations.geojson', 'date-tzcld');
   } catch(e) {
     console.warn('Fichier cle-delimitations.geojson non trouvé ou introuvable.', e);
   }
