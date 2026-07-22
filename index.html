@@ -265,7 +265,7 @@ let navLevel='national';
 let nav={region:null,department:null,clpe:null};
 
 function updateNavBar(){
-  document.getElementById('nav-national').classList.toggle('active',navLevel==national');
+  document.getElementById('nav-national').classList.toggle('active',navLevel==='national');
   const show=id=>document.getElementById(id).classList.remove('hidden');
   const hide=id=>document.getElementById(id).classList.add('hidden');
   if(nav.region){
@@ -483,13 +483,17 @@ function addBbox(geojson){
 async function fetchWithDate(url, dateId) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} sur ${url}`);
-  const lastMod = res.headers.get('Last-Modified');
-  if (lastMod) {
-    const d = new Date(lastMod);
-    if (!isNaN(d)) {
-      const el = document.getElementById(dateId);
-      if (el) el.textContent = `(màj ${d.toLocaleDateString('fr-FR')})`;
+  try {
+    const lastMod = res.headers.get('Last-Modified');
+    if (lastMod) {
+      const d = new Date(lastMod);
+      if (!isNaN(d)) {
+        const el = document.getElementById(dateId);
+        if (el) el.textContent = `(màj ${d.toLocaleDateString('fr-FR')})`;
+      }
     }
+  } catch(e) {
+    // Silencieux : parfois bloqué en local (CORS/file://)
   }
   return res.json();
 }
