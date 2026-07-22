@@ -479,40 +479,39 @@ function addBbox(geojson){
   return geojson;
 }
 
-// Fonction pour récupérer le geojson et extraire sa date de dernière modification
-async function fetchWithDate(url, dateId) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status} sur ${url}`);
-  try {
-    const lastMod = res.headers.get('Last-Modified');
-    if (lastMod) {
-      const d = new Date(lastMod);
-      if (!isNaN(d)) {
-        const el = document.getElementById(dateId);
-        if (el) el.textContent = `(màj ${d.toLocaleDateString('fr-FR')})`;
-      }
-    }
-  } catch(e) {
-    // Silencieux : parfois bloqué en local (CORS/file://)
-  }
-  return res.json();
-}
-
 async function loadAll(){
+  // --- CONFIGURATION MANUELLE DES DATES ---
+  // Modifiez les dates ici pour qu'elles s'affichent dans la légende
+  const DATA_DATES = {
+    'date-clpe': 'Juin 2026',
+    'date-tzcld': 'Juin 2026',
+    'date-reg': 'Millesime 2024',
+    'date-dep': 'Millesime 2024',
+    'date-epci': 'Millesime 2024',
+    'date-com': 'Millesime 2024'
+  };
+
+  // Application automatique des dates dans la légende
+  Object.entries(DATA_DATES).forEach(([id, dateStr]) => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = `(màj ${dateStr})`;
+  });
+  // ----------------------------------------
+
   setProgress(5,'Chargement des régions…');
-  const regRaw=await fetchWithDate('data/region.geojson', 'date-reg');
+  const regRaw=await fetch('data/region.geojson').then(r=>r.json());
   addBbox(regRaw);
   REG_FULL=regRaw;
   REG_DATA={...regRaw,features:regRaw.features.filter(f=>!REGS_NO_CLPE.has(f.properties.nom_officiel))};
   
   setProgress(14,'Chargement des départements…');
-  const depRaw=await fetchWithDate('data/departement.geojson', 'date-dep');
+  const depRaw=await fetch('data/departement.geojson').then(r=>r.json());
   addBbox(depRaw);
   DEP_FULL=depRaw;
   DEP_DATA={...depRaw,features:depRaw.features.filter(f=>!DEPS_NO_CLPE.has(f.properties.nom_officiel))};
   
   setProgress(25,'Chargement des comités locaux…');
-  CLPE_DATA=await fetchWithDate('data/CLPE.geojson', 'date-clpe').then(geojson=>{
+  CLPE_DATA=await fetch('data/CLPE.geojson').then(r=>r.json()).then(geojson=>{
     geojson.features=geojson.features.map((f,i)=>{
       const props=f.properties||{};
       const clpeName=props['Libellé Comité Local Pour l-Emploi']||props['CLPE']||props['nom']||'';
@@ -538,14 +537,14 @@ async function loadAll(){
   });
   
   setProgress(36,'Chargement des communes (incluant DOM)…');
-  COM_DATA=await fetchWithDate('data/commune.geojson', 'date-com');
+  COM_DATA=await fetch('data/commune.geojson').then(r=>r.json());
   
   setProgress(55,'Chargement des EPCI…');
-  EPCI_DATA=await fetchWithDate('data/epci.geojson', 'date-epci').catch(()=>{console.warn('epci.geojson non disponible');return null;});
+  EPCI_DATA=await fetch('data/epci.geojson').then(r=>r.json()).catch(()=>{console.warn('epci.geojson non disponible');return null;});
   
   setProgress(65,'Chargement des délimitations TZCLD…');
   try {
-    TZCLD_DATA = await fetchWithDate('data/cle-delimitations.geojson', 'date-tzcld');
+    TZCLD_DATA = await fetch('data/cle-delimitations.geojson').then(r=>r.json());
   } catch(e) {
     console.warn('Fichier cle-delimitations.geojson non trouvé ou introuvable.', e);
   }
