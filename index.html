@@ -108,6 +108,10 @@ select:focus { border-color:#4a9fd4; box-shadow:0 0 0 2px rgba(74,159,212,.2); }
 .tooltip-clpe .tt-info   { display:block; font-size:.65rem; color:#8aacbe !important; font-style:italic; }
 .tooltip-clpe .tt-clpe   { display:block; font-size:.78rem; color:#e8f4ff !important; font-weight:700; border-top:1px solid rgba(74,159,212,.25); padding-top:4px; margin-top:3px; }
 .tooltip-clpe .tt-clpe-code { display:block; font-size:.63rem; color:#7aaccc !important; font-weight:400; margin-top:1px; }
+
+/* Nouveau style pour l'ajout du texte TZCLD dans l'infobulle globale */
+.tooltip-clpe .tt-tzcld { display:block; font-size:.78rem; color:#f39c12 !important; font-weight:700; border-top:1px solid rgba(243,156,18,.3); padding-top:4px; margin-top:3px; }
+
 #legend { position:absolute; bottom:22px; left:14px; background:rgba(4,12,22,.92); border:1px solid #1a3550; border-radius:9px; padding:10px 14px; font-size:.69rem; z-index:1000; min-width:160px; box-shadow:0 4px 18px rgba(0,0,0,.6); }
 #legend h3 { color:#7ec8f4; font-size:.71rem; margin-bottom:8px; font-weight:700; letter-spacing:.3px; }
 .leg-item { display:flex; align-items:center; gap:8px; margin-bottom:5px; color:#7090a8; }
@@ -254,9 +258,11 @@ const tzcldPane=map.createPane('tzcldPane'); tzcldPane.style.zIndex='435';
 const epciPane=map.createPane('epciPane'); epciPane.style.zIndex='438';
 const depPane=map.createPane('depPane');   depPane.style.zIndex='440';
 const regPane=map.createPane('regPane');   regPane.style.zIndex='450';
+
 comPane.style.pointerEvents='none';
 clpePane.style.pointerEvents='auto';
-tzcldPane.style.pointerEvents='none';
+// On remet la couche en "none" pour qu'elle ne bloque pas les survols (hovers) de la couche CLPE en dessous
+tzcldPane.style.pointerEvents='none'; 
 epciPane.style.pointerEvents='none';
 depPane.style.pointerEvents='none';
 regPane.style.pointerEvents='none';
@@ -479,19 +485,54 @@ function addBbox(geojson){
   return geojson;
 }
 
+// Fonction mathématique pour savoir si la souris (pt) est dans un polygone (ring) de TZCLD
+function pointInPoly(pt, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    let xi = ring[i][0], yi = ring[i][1];
+    let xj = ring[j][0], yj = ring[j][1];
+    let intersect = ((yi > pt[1]) !== (yj > pt[1])) && (pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// Chercher à quel TZCLD appartient la coordonnée de la souris
+function getTZCLDAt(lng, lat) {
+  if (!TZCLD_DATA || !document.getElementById('chk-tzcld').checked) return null;
+  for (let f of TZCLD_DATA.features) {
+    let b = f.properties.bbox;
+    // Vérification très rapide avec la bbox (pour ne pas faire le calcul complexe si on est très loin)
+    if (b && (lng < b[0] || lng > b[2] || lat < b[1] || lat > b[3])) continue;
+    
+    let type = f.geometry.type;
+    let polys = type === 'Polygon' ? [f.geometry.coordinates] : (type === 'MultiPolygon' ? f.geometry.coordinates : []);
+    for (let poly of polys) {
+      // Test de l'anneau extérieur (poly[0])
+      if (pointInPoly([lng, lat], poly[0])) {
+        let insideHole = false;
+        // Test si on tombe dans un "trou" du polygone (ex: un lac à l'intérieur)
+        for (let k = 1; k < poly.length; k++) {
+          if (pointInPoly([lng, lat], poly[k])) { insideHole = true; break; }
+        }
+        if (!insideHole) return f.properties.CLE;
+      }
+    }
+  }
+  return null;
+}
+
 async function loadAll(){
   // --- CONFIGURATION MANUELLE DES DATES ---
-  // Modifiez les dates ici pour qu'elles s'affichent dans la légende
   const DATA_DATES = {
-    'date-clpe': 'Juin 2026',
-    'date-tzcld': 'Juin 2026',
+    'date-clpe': 'juillet 2026',
+    'date-tzcld': 'juillet 2026',
     'date-reg': 'Millesime 2024',
     'date-dep': 'Millesime 2024',
     'date-epci': 'Millesime 2024',
     'date-com': 'Millesime 2024'
   };
 
-  // Application automatique des dates dans la légende
   Object.entries(DATA_DATES).forEach(([id, dateStr]) => {
     const el = document.getElementById(id);
     if(el) el.textContent = `(màj ${dateStr})`;
@@ -544,7 +585,9 @@ async function loadAll(){
   
   setProgress(65,'Chargement des délimitations TZCLD…');
   try {
-    TZCLD_DATA = await fetch('data/cle-delimitations.geojson').then(r=>r.json());
+    const tzcldRaw = await fetch('data/cle-delimitations.geojson').then(r=>r.json());
+    addBbox(tzcldRaw); // On calcule les boîtes englobantes pour optimiser la détection de survol
+    TZCLD_DATA = tzcldRaw;
   } catch(e) {
     console.warn('Fichier cle-delimitations.geojson non trouvé ou introuvable.', e);
   }
@@ -570,7 +613,9 @@ async function addWorldMask(){
 }
 
 const tooltip=L.tooltip({className:'tooltip-clpe',permanent:false,direction:'top',offset:[0,-10]});
-function ttHTML(p,comObj){
+
+// Fonction de génération du contenu de l'infobulle (maintenant elle accepte "tzcldName")
+function ttHTML(p, comObj, tzcldName){
   let depName=p.dep||'—', regName=p.reg||'—';
   if(comObj&&comObj.code){
     if(comObj.code==='NR'){
@@ -592,12 +637,14 @@ function ttHTML(p,comObj){
   const pop=comObj&&comObj.pop>0?comObj.pop.toLocaleString('fr-FR')+' hab.':null;
   const sup=comObj&&comObj.sup>0?comObj.sup.toLocaleString('fr-FR',{maximumFractionDigits:1})+' km²':null;
   const clpeCode=clpeNameToCode[p.CLPE||'']||'';
+  
   return (comObj?'<span class="tt-com">Commune : '+comObj.name+'</span>':'')
         +((pop||sup)?'<span class="tt-info">'+(pop?'👥 '+pop:'')+(pop&&sup?' &nbsp;·&nbsp; ':'')+(sup?'📐 '+sup:'')+'</span>':'')
         +(epciName?'<span class="tt-epci">EPCI : '+epciName+'</span>':'')
         +'<span class="tt-dep">Département : '+depName+'</span>'
         +'<span class="tt-region">Région : '+regName+'</span>'
-        +'<span class="tt-clpe">CLPE : '+(p.CLPE||'—')+(clpeCode?'<span class="tt-clpe-code">'+clpeCode+'</span>':'')+'</span>';
+        +'<span class="tt-clpe">CLPE : '+(p.CLPE||'—')+(clpeCode?'<span class="tt-clpe-code">'+clpeCode+'</span>':'')+'</span>'
+        +(tzcldName?'<span class="tt-tzcld">TZCLD : '+tzcldName+'</span>':''); // <-- Ajout de la ligne TZCLD dynamiquement
 }
 
 function buildLayers(){
@@ -616,8 +663,16 @@ function buildLayers(){
     style:feat=>CLPE_NORMAL(feat.properties),
     onEachFeature(feat,layer){
       const p=feat.properties;
-      layer.on('mouseover',e=>{layer.setStyle(CLPE_HOVER(p));tooltip.setLatLng(e.latlng).setContent(ttHTML(p,nearestCommune(e.latlng.lng,e.latlng.lat,p.CLPE))).addTo(map);});
-      layer.on('mousemove',e=>{tooltip.setLatLng(e.latlng).setContent(ttHTML(p,nearestCommune(e.latlng.lng,e.latlng.lat,p.CLPE)));});
+      layer.on('mouseover',e=>{
+        layer.setStyle(CLPE_HOVER(p));
+        // On vérifie dynamiquement si le point survolé tombe dans un TZCLD
+        const tzcldName = getTZCLDAt(e.latlng.lng, e.latlng.lat);
+        tooltip.setLatLng(e.latlng).setContent(ttHTML(p, nearestCommune(e.latlng.lng, e.latlng.lat, p.CLPE), tzcldName)).addTo(map);
+      });
+      layer.on('mousemove',e=>{
+        const tzcldName = getTZCLDAt(e.latlng.lng, e.latlng.lat);
+        tooltip.setLatLng(e.latlng).setContent(ttHTML(p, nearestCommune(e.latlng.lng, e.latlng.lat, p.CLPE), tzcldName));
+      });
       layer.on('mouseout',()=>{layer.setStyle(CLPE_NORMAL(p));map.removeLayer(tooltip);});
       layer.on('click',()=>{
         nav.clpe=p.CLPE;nav.department=p.dep;nav.region=p.reg;navLevel='clpe';
@@ -636,7 +691,7 @@ function buildLayers(){
         weight: 2.5,
         color: '#f39c12',
         fill: false, 
-        interactive: false
+        interactive: false // Remis à false pour laisser les "clics" aux CLPE
       }
     });
     if (document.getElementById('chk-tzcld').checked) { map.addLayer(tzcldLayer); }
